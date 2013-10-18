@@ -182,19 +182,19 @@ class CraftMetaItem implements ItemMeta, Repairable {
     static final ItemMetaKey ENCHANTMENTS_LVL = new ItemMetaKey("lvl");
     static final ItemMetaKey REPAIR = new ItemMetaKey("RepairCost", "repair-cost");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES = new ItemMetaKey("AttributeModifiers");
+    static final ItemMetaKey ATTRIBUTES = new ItemMetaKey("AttributeModifiers", "attribute-modifiers");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_IDENTIFIER = new ItemMetaKey("AttributeName");
+    static final ItemMetaKey ATTRIBUTES_IDENTIFIER = new ItemMetaKey("AttributeName", "id");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_NAME = new ItemMetaKey("Name");
+    static final ItemMetaKey ATTRIBUTES_NAME = new ItemMetaKey("Name", "attribute-name");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_VALUE = new ItemMetaKey("Amount");
+    static final ItemMetaKey ATTRIBUTES_VALUE = new ItemMetaKey("Amount", "amount");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_TYPE = new ItemMetaKey("Operation");
+    static final ItemMetaKey ATTRIBUTES_TYPE = new ItemMetaKey("Operation", "operation");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_UUID_HIGH = new ItemMetaKey("UUIDMost");
+    static final ItemMetaKey ATTRIBUTES_UUID_HIGH = new ItemMetaKey("UUIDMost", "uuid-high");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_UUID_LOW = new ItemMetaKey("UUIDLeast");
+    static final ItemMetaKey ATTRIBUTES_UUID_LOW = new ItemMetaKey("UUIDLeast", "uuid-low");
 
     private String displayName;
     private List<String> lore;
@@ -330,7 +330,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
             setRepairCost(repairCost);
         }
 
-        attributes = null;
+        attributes = buildAttributes(map, ATTRIBUTES);
     }
 
     static Map<Enchantment, Integer> buildEnchantments(Map<String, Object> map, ItemMetaKey key) {
@@ -349,6 +349,27 @@ class CraftMetaItem implements ItemMeta, Repairable {
         }
 
         return enchantments;
+    }
+
+    static NBTTagList buildAttributes(Map<String, Object> map, ItemMetaKey key) {
+        List<Map<String, Object>> attributeList = SerializableMeta.getObject(List.class, map, key.BUKKIT, true);
+        if (attributeList == null) {
+            return null;
+        }
+
+        NBTTagList attributes = new NBTTagList();
+        for (Map<String, Object> attribute : attributeList) {
+            NBTTagCompound entry = new NBTTagCompound();
+            entry.setLong(ATTRIBUTES_UUID_HIGH.NBT, (Long) attribute.get(ATTRIBUTES_UUID_HIGH.BUKKIT));
+            entry.setLong(ATTRIBUTES_UUID_LOW.NBT, (Long) attribute.get(ATTRIBUTES_UUID_LOW.BUKKIT));
+            entry.setString(ATTRIBUTES_IDENTIFIER.NBT, (String) attribute.get(ATTRIBUTES_IDENTIFIER.BUKKIT));
+            entry.setString(ATTRIBUTES_NAME.NBT, (String) attribute.get(ATTRIBUTES_NAME.BUKKIT));
+            entry.setDouble(ATTRIBUTES_VALUE.NBT, (Double) attribute.get(ATTRIBUTES_VALUE.BUKKIT));
+            entry.setInt(ATTRIBUTES_TYPE.NBT, (Integer) attribute.get(ATTRIBUTES_TYPE.BUKKIT));
+            attributes.add(entry);
+        }
+
+        return attributes;
     }
 
     @Overridden
@@ -441,7 +462,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
     }
 
     public boolean hasAttributes() {
-        return this.attributes != null;
+        return this.attributes != null && attributes.size() > 0;
     }
 
     public boolean hasRepairCost() {
@@ -607,6 +628,10 @@ class CraftMetaItem implements ItemMeta, Repairable {
             builder.put(REPAIR.BUKKIT, repairCost);
         }
 
+        if (hasAttributes()) {
+            serializeAttributes(attributes, builder, ATTRIBUTES);
+        }
+
         return builder;
     }
 
@@ -621,6 +646,46 @@ class CraftMetaItem implements ItemMeta, Repairable {
         }
 
         builder.put(key.BUKKIT, enchants.build());
+    }
+
+    static void serializeAttributes(NBTTagList nbttaglist, ImmutableMap.Builder<String, Object> builder, ItemMetaKey key) {
+        ImmutableList.Builder<ImmutableMap<String, Object>> attributeList = ImmutableList.builder();
+        for (int i = 0; i < nbttaglist.size(); i++) {
+            ImmutableMap.Builder<String, Object> attributes = ImmutableMap.builder();
+            if (!(nbttaglist.get(i) instanceof NBTTagCompound)) {
+                continue;
+            }
+            NBTTagCompound nbttagcompound = (NBTTagCompound) nbttaglist.get(i);
+
+            if (!(nbttagcompound.get(ATTRIBUTES_UUID_HIGH.NBT) instanceof NBTTagLong)) {
+                continue;
+            }
+            if (!(nbttagcompound.get(ATTRIBUTES_UUID_LOW.NBT) instanceof NBTTagLong)) {
+                continue;
+            }
+            if (!(nbttagcompound.get(ATTRIBUTES_IDENTIFIER.NBT) instanceof NBTTagString) || !CraftItemFactory.KNOWN_NBT_ATTRIBUTE_NAMES.contains(nbttagcompound.getString(ATTRIBUTES_IDENTIFIER.NBT))) {
+                continue;
+            }
+            if (!(nbttagcompound.get(ATTRIBUTES_NAME.NBT) instanceof NBTTagString) || nbttagcompound.getString(ATTRIBUTES_NAME.NBT).isEmpty()) {
+                continue;
+            }
+            if (!(nbttagcompound.get(ATTRIBUTES_VALUE.NBT) instanceof NBTTagDouble)) {
+                continue;
+            }
+            if (!(nbttagcompound.get(ATTRIBUTES_TYPE.NBT) instanceof NBTTagInt) || nbttagcompound.getInt(ATTRIBUTES_TYPE.NBT) < 0 || nbttagcompound.getInt(ATTRIBUTES_TYPE.NBT) > 2) {
+                continue;
+            }
+
+            attributes.put(ATTRIBUTES_UUID_HIGH.BUKKIT, nbttagcompound.getLong(ATTRIBUTES_UUID_HIGH.NBT));
+            attributes.put(ATTRIBUTES_UUID_LOW.BUKKIT, nbttagcompound.getLong(ATTRIBUTES_UUID_LOW.NBT));
+            attributes.put(ATTRIBUTES_IDENTIFIER.BUKKIT, nbttagcompound.getString(ATTRIBUTES_IDENTIFIER.NBT));
+            attributes.put(ATTRIBUTES_NAME.BUKKIT, nbttagcompound.getString(ATTRIBUTES_NAME.NBT));
+            attributes.put(ATTRIBUTES_VALUE.BUKKIT, nbttagcompound.getDouble(ATTRIBUTES_VALUE.NBT));
+            attributes.put(ATTRIBUTES_TYPE.BUKKIT, nbttagcompound.getInt(ATTRIBUTES_TYPE.NBT));
+            attributeList.add(attributes.build());
+        }
+
+        builder.put(key.BUKKIT, attributeList.build());
     }
 
     static void safelyAdd(Iterable<?> addFrom, Collection<String> addTo, int maxItemLength) {
