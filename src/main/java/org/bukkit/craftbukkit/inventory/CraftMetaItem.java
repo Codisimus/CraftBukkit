@@ -226,9 +226,13 @@ class CraftMetaItem implements ItemMeta, Repairable {
 
         this.repairCost = meta.repairCost;
 
-        this.attributes = (NBTTagList) meta.attributes.clone();
+        this.attributes = meta.attributes == null
+                          ? null
+                          : (NBTTagList) meta.attributes.clone();
 
-        this.plugin = (NBTTagCompound) plugin.clone();
+        this.plugin = meta.plugin == null
+                      ? null
+                      : (NBTTagCompound) plugin.clone();
     }
 
     CraftMetaItem(NBTTagCompound tag) {
@@ -264,7 +268,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
 
         if (tag.hasKey(PLUGIN.NBT) && tag.get(PLUGIN.NBT) instanceof NBTTagCompound) {
             this.plugin = tag.hasKey(PLUGIN.NBT) && tag.get(PLUGIN.NBT) instanceof NBTTagCompound
-                              ? (NBTTagCompound) tag.getList(PLUGIN.NBT, 10).clone()
+                              ? (NBTTagCompound) tag.getCompound(PLUGIN.NBT).clone()
                               : null;
         }
     }
