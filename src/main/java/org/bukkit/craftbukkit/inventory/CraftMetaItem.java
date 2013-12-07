@@ -35,9 +35,6 @@ import org.bukkit.inventory.meta.Repairable;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import java.util.*;
-import java.util.logging.Level;
-import org.bukkit.Bukkit;
 
 /**
  * Children must include the following:
@@ -185,28 +182,25 @@ class CraftMetaItem implements ItemMeta, Repairable {
     static final ItemMetaKey ENCHANTMENTS_LVL = new ItemMetaKey("lvl");
     static final ItemMetaKey REPAIR = new ItemMetaKey("RepairCost", "repair-cost");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES = new ItemMetaKey("AttributeModifiers", "attribute-modifiers");
+    static final ItemMetaKey ATTRIBUTES = new ItemMetaKey("AttributeModifiers");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_IDENTIFIER = new ItemMetaKey("AttributeName", "id");
+    static final ItemMetaKey ATTRIBUTES_IDENTIFIER = new ItemMetaKey("AttributeName");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_NAME = new ItemMetaKey("Name", "attribute-name");
+    static final ItemMetaKey ATTRIBUTES_NAME = new ItemMetaKey("Name");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_VALUE = new ItemMetaKey("Amount", "amount");
+    static final ItemMetaKey ATTRIBUTES_VALUE = new ItemMetaKey("Amount");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_TYPE = new ItemMetaKey("Operation", "operation");
+    static final ItemMetaKey ATTRIBUTES_TYPE = new ItemMetaKey("Operation");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_UUID_HIGH = new ItemMetaKey("UUIDMost", "uuid-high");
+    static final ItemMetaKey ATTRIBUTES_UUID_HIGH = new ItemMetaKey("UUIDMost");
     @Specific(Specific.To.NBT)
-    static final ItemMetaKey ATTRIBUTES_UUID_LOW = new ItemMetaKey("UUIDLeast", "uuid-low");
-    @Specific(Specific.To.NBT)
-    static final ItemMetaKey PLUGIN = new ItemMetaKey("PluginCompounds", "plugin-compounds");
+    static final ItemMetaKey ATTRIBUTES_UUID_LOW = new ItemMetaKey("UUIDLeast");
 
     private String displayName;
     private List<String> lore;
     private Map<Enchantment, Integer> enchantments;
     private int repairCost;
-    private NBTTagList attributes;
-    private NBTTagCompound plugin;
+    private final NBTTagList attributes;
 
     CraftMetaItem(CraftMetaItem meta) {
         if (meta == null) {
@@ -225,10 +219,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
         }
 
         this.repairCost = meta.repairCost;
-
-        this.attributes = (NBTTagList) meta.attributes.clone();
-
-        this.plugin = (NBTTagCompound) plugin.clone();
+        this.attributes = meta.attributes;
     }
 
     CraftMetaItem(NBTTagCompound tag) {
@@ -256,16 +247,53 @@ class CraftMetaItem implements ItemMeta, Repairable {
             repairCost = tag.getInt(REPAIR.NBT);
         }
 
-        if (tag.hasKey(ATTRIBUTES.NBT) && tag.get(ATTRIBUTES.NBT) instanceof NBTTagList) {
-            this.attributes = tag.hasKey(ATTRIBUTES.NBT) && tag.get(ATTRIBUTES.NBT) instanceof NBTTagList
-                              ? (NBTTagList) tag.getList(ATTRIBUTES.NBT, 10).clone()
-                              : null;
-        }
 
-        if (tag.hasKey(PLUGIN.NBT) && tag.get(PLUGIN.NBT) instanceof NBTTagCompound) {
-            this.plugin = tag.hasKey(PLUGIN.NBT) && tag.get(PLUGIN.NBT) instanceof NBTTagCompound
-                              ? (NBTTagCompound) tag.getList(PLUGIN.NBT, 10).clone()
-                              : null;
+        if (tag.get(ATTRIBUTES.NBT) instanceof NBTTagList) {
+            NBTTagList save = null;
+            NBTTagList nbttaglist = tag.getList(ATTRIBUTES.NBT, 10);
+
+            for (int i = 0; i < nbttaglist.size(); ++i) {
+                if (!(nbttaglist.get(i) instanceof NBTTagCompound)) {
+                    continue;
+                }
+                NBTTagCompound nbttagcompound = (NBTTagCompound) nbttaglist.get(i);
+
+                if (!(nbttagcompound.get(ATTRIBUTES_UUID_HIGH.NBT) instanceof NBTTagLong)) {
+                    continue;
+                }
+                if (!(nbttagcompound.get(ATTRIBUTES_UUID_LOW.NBT) instanceof NBTTagLong)) {
+                    continue;
+                }
+                if (!(nbttagcompound.get(ATTRIBUTES_IDENTIFIER.NBT) instanceof NBTTagString) || !CraftItemFactory.KNOWN_NBT_ATTRIBUTE_NAMES.contains(nbttagcompound.getString(ATTRIBUTES_IDENTIFIER.NBT))) {
+                    continue;
+                }
+                if (!(nbttagcompound.get(ATTRIBUTES_NAME.NBT) instanceof NBTTagString) || nbttagcompound.getString(ATTRIBUTES_NAME.NBT).isEmpty()) {
+                    continue;
+                }
+                if (!(nbttagcompound.get(ATTRIBUTES_VALUE.NBT) instanceof NBTTagDouble)) {
+                    continue;
+                }
+                if (!(nbttagcompound.get(ATTRIBUTES_TYPE.NBT) instanceof NBTTagInt) || nbttagcompound.getInt(ATTRIBUTES_TYPE.NBT) < 0 || nbttagcompound.getInt(ATTRIBUTES_TYPE.NBT) > 2) {
+                    continue;
+                }
+
+                if (save == null) {
+                    save = new NBTTagList();
+                }
+
+                NBTTagCompound entry = new NBTTagCompound();
+                entry.set(ATTRIBUTES_UUID_HIGH.NBT, nbttagcompound.get(ATTRIBUTES_UUID_HIGH.NBT));
+                entry.set(ATTRIBUTES_UUID_LOW.NBT, nbttagcompound.get(ATTRIBUTES_UUID_LOW.NBT));
+                entry.set(ATTRIBUTES_IDENTIFIER.NBT, nbttagcompound.get(ATTRIBUTES_IDENTIFIER.NBT));
+                entry.set(ATTRIBUTES_NAME.NBT, nbttagcompound.get(ATTRIBUTES_NAME.NBT));
+                entry.set(ATTRIBUTES_VALUE.NBT, nbttagcompound.get(ATTRIBUTES_VALUE.NBT));
+                entry.set(ATTRIBUTES_TYPE.NBT, nbttagcompound.get(ATTRIBUTES_TYPE.NBT));
+                save.add(entry);
+            }
+
+            attributes = save;
+        } else {
+            attributes = null;
         }
     }
 
@@ -302,9 +330,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
             setRepairCost(repairCost);
         }
 
-        attributes = buildAttributes(map, ATTRIBUTES);
-
-        plugin = buildPluginCompunds(map, PLUGIN);
+        attributes = null;
     }
 
     static Map<Enchantment, Integer> buildEnchantments(Map<String, Object> map, ItemMetaKey key) {
@@ -325,83 +351,6 @@ class CraftMetaItem implements ItemMeta, Repairable {
         return enchantments;
     }
 
-    static NBTTagList buildAttributes(Map<String, Object> map, ItemMetaKey key) {
-        List<Map<String, Object>> attributeList = SerializableMeta.getObject(List.class, map, key.BUKKIT, true);
-        if (attributeList == null) {
-            return null;
-        }
-
-        NBTTagList attributes = new NBTTagList();
-        for (Map<String, Object> attribute : attributeList) {
-            NBTTagCompound entry = new NBTTagCompound();
-            entry.setLong(ATTRIBUTES_UUID_HIGH.NBT, (Long) attribute.get(ATTRIBUTES_UUID_HIGH.BUKKIT));
-            entry.setLong(ATTRIBUTES_UUID_LOW.NBT, (Long) attribute.get(ATTRIBUTES_UUID_LOW.BUKKIT));
-            entry.setString(ATTRIBUTES_IDENTIFIER.NBT, (String) attribute.get(ATTRIBUTES_IDENTIFIER.BUKKIT));
-            entry.setString(ATTRIBUTES_NAME.NBT, (String) attribute.get(ATTRIBUTES_NAME.BUKKIT));
-            entry.setDouble(ATTRIBUTES_VALUE.NBT, (Double) attribute.get(ATTRIBUTES_VALUE.BUKKIT));
-            entry.setInt(ATTRIBUTES_TYPE.NBT, (Integer) attribute.get(ATTRIBUTES_TYPE.BUKKIT));
-            attributes.add(entry);
-        }
-
-        return attributes;
-    }
-
-    private enum AcceptedNMSValue {
-        BOOLEAN, BYTE, DOUBLE, FLOAT, INTEGER, LONG, SHORT, STRING;
-    }
-
-    static NBTTagCompound buildPluginCompunds(Map<String, Object> map, ItemMetaKey key) {
-        Map<String, Object> pluginMaps = SerializableMeta.getObject(Map.class, map, key.BUKKIT, true);
-        if (pluginMaps == null) {
-            return null;
-        }
-
-        NBTTagCompound pluginCompounds = new NBTTagCompound();
-        for (String pluginName : pluginMaps.keySet()) {
-            NBTTagCompound pluginCompound = new NBTTagCompound();
-            Map<String, Object> pluginMap = (Map<String, Object>) pluginMaps.get(pluginName);
-            for (String s : pluginMap.keySet()) {
-                AcceptedNMSValue nmsValue;
-                Object value = pluginMap.get(s);
-                try {
-                    nmsValue = AcceptedNMSValue.valueOf(value.getClass().getSimpleName().toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    Bukkit.getLogger().log(Level.SEVERE, "Invalid NMS type in PluginCompounds", e);
-                    continue;
-                }
-                switch(nmsValue) {
-                case BOOLEAN:
-                    pluginCompound.setBoolean(s, (Boolean) value);
-                    break;
-                case BYTE:
-                    pluginCompound.setByte(s, (Byte) value);
-                    break;
-                case DOUBLE:
-                    pluginCompound.setDouble(s, (Double) value);
-                    break;
-                case FLOAT:
-                    pluginCompound.setFloat(s, (Float) value);
-                    break;
-                case INTEGER:
-                    pluginCompound.setInt(s, (Integer) value);
-                    break;
-                case LONG:
-                    pluginCompound.setLong(s, (Long) value);
-                    break;
-                case SHORT:
-                    pluginCompound.setShort(s, (Short) value);
-                    break;
-                case STRING:
-                    pluginCompound.setString(s, (String) value);
-                    break;
-                }
-            }
-            pluginCompounds.set(pluginName, pluginCompound);
-        }
-
-        return pluginCompounds;
-    }
-
     @Overridden
     void applyToItem(NBTTagCompound itemTag) {
         if (hasDisplayName()) {
@@ -419,11 +368,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
         }
 
         if (attributes != null) {
-            itemTag.set(ATTRIBUTES.NBT, attributes.clone());
-        }
-
-        if (plugin != null) {
-            itemTag.set(PLUGIN.NBT, plugin.clone());
+            itemTag.set(ATTRIBUTES.NBT, attributes);
         }
     }
 
@@ -496,11 +441,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
     }
 
     public boolean hasAttributes() {
-        return this.attributes != null && this.attributes.size() > 0;
-    }
-
-    public boolean hasPluginCompound() {
-        return this.plugin != null && !this.plugin.isEmpty();
+        return this.attributes != null;
     }
 
     public boolean hasRepairCost() {
@@ -597,8 +538,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
                 && (this.hasEnchants() ? that.hasEnchants() && this.enchantments.equals(that.enchantments) : !that.hasEnchants())
                 && (this.hasLore() ? that.hasLore() && this.lore.equals(that.lore) : !that.hasLore())
                 && (this.hasAttributes() ? that.hasAttributes() && this.attributes.equals(that.attributes) : !that.hasAttributes())
-                && (this.hasRepairCost() ? that.hasRepairCost() && this.repairCost == that.repairCost : !that.hasRepairCost())
-                && (this.hasPluginCompound() ? that.hasPluginCompound() && this.plugin.equals(that.plugin) : !that.hasPluginCompound());
+                && (this.hasRepairCost() ? that.hasRepairCost() && this.repairCost == that.repairCost : !that.hasRepairCost());
     }
 
     /**
@@ -624,7 +564,6 @@ class CraftMetaItem implements ItemMeta, Repairable {
         hash = 61 * hash + (hasEnchants() ? this.enchantments.hashCode() : 0);
         hash = 61 * hash + (hasAttributes() ? this.attributes.hashCode() : 0);
         hash = 61 * hash + (hasRepairCost() ? this.repairCost : 0);
-        hash = 61 * hash + (hasPluginCompound() ? this.plugin.hashCode() : 0);
         return hash;
     }
 
@@ -638,12 +577,6 @@ class CraftMetaItem implements ItemMeta, Repairable {
             }
             if (this.enchantments != null) {
                 clone.enchantments = new HashMap<Enchantment, Integer>(this.enchantments);
-            }
-            if (this.attributes != null) {
-                clone.attributes = (NBTTagList) this.attributes.clone();
-            }
-            if (this.plugin != null) {
-                clone.plugin = (NBTTagCompound) this.plugin.clone();
             }
             return clone;
         } catch (CloneNotSupportedException e) {
@@ -674,10 +607,6 @@ class CraftMetaItem implements ItemMeta, Repairable {
             builder.put(REPAIR.BUKKIT, repairCost);
         }
 
-        serializeAttributes(attributes, builder, ATTRIBUTES);
-
-        serializePluginCompounds(plugin, builder, PLUGIN);
-
         return builder;
     }
 
@@ -692,94 +621,6 @@ class CraftMetaItem implements ItemMeta, Repairable {
         }
 
         builder.put(key.BUKKIT, enchants.build());
-    }
-
-    static void serializeAttributes(NBTTagList nbttaglist, ImmutableMap.Builder<String, Object> builder, ItemMetaKey key) {
-        if (nbttaglist == null || nbttaglist.size() == 0) {
-            return;
-        }
-
-        ImmutableList.Builder<ImmutableMap<String, Object>> attributeList = ImmutableList.builder();
-        for (int i = 0; i < nbttaglist.size(); i++) {
-            ImmutableMap.Builder<String, Object> attributes = ImmutableMap.builder();
-            if (!(nbttaglist.get(i) instanceof NBTTagCompound)) {
-                continue;
-            }
-            NBTTagCompound nbttagcompound = (NBTTagCompound) nbttaglist.get(i);
-
-            if (!(nbttagcompound.get(ATTRIBUTES_UUID_HIGH.NBT) instanceof NBTTagLong)) {
-                continue;
-            }
-            if (!(nbttagcompound.get(ATTRIBUTES_UUID_LOW.NBT) instanceof NBTTagLong)) {
-                continue;
-            }
-            if (!(nbttagcompound.get(ATTRIBUTES_IDENTIFIER.NBT) instanceof NBTTagString)) {//|| !CraftItemFactory.KNOWN_NBT_ATTRIBUTE_NAMES.contains(nbttagcompound.getString(ATTRIBUTES_IDENTIFIER.NBT))) {
-                continue;
-            }
-            if (!(nbttagcompound.get(ATTRIBUTES_NAME.NBT) instanceof NBTTagString) || nbttagcompound.getString(ATTRIBUTES_NAME.NBT).isEmpty()) {
-                continue;
-            }
-            if (!(nbttagcompound.get(ATTRIBUTES_VALUE.NBT) instanceof NBTTagDouble)) {
-                continue;
-            }
-            if (!(nbttagcompound.get(ATTRIBUTES_TYPE.NBT) instanceof NBTTagInt) || nbttagcompound.getInt(ATTRIBUTES_TYPE.NBT) < 0 || nbttagcompound.getInt(ATTRIBUTES_TYPE.NBT) > 2) {
-                continue;
-            }
-
-            attributes.put(ATTRIBUTES_UUID_HIGH.BUKKIT, nbttagcompound.getLong(ATTRIBUTES_UUID_HIGH.NBT));
-            attributes.put(ATTRIBUTES_UUID_LOW.BUKKIT, nbttagcompound.getLong(ATTRIBUTES_UUID_LOW.NBT));
-            attributes.put(ATTRIBUTES_IDENTIFIER.BUKKIT, nbttagcompound.getString(ATTRIBUTES_IDENTIFIER.NBT));
-            attributes.put(ATTRIBUTES_NAME.BUKKIT, nbttagcompound.getString(ATTRIBUTES_NAME.NBT));
-            attributes.put(ATTRIBUTES_VALUE.BUKKIT, nbttagcompound.getDouble(ATTRIBUTES_VALUE.NBT));
-            attributes.put(ATTRIBUTES_TYPE.BUKKIT, nbttagcompound.getInt(ATTRIBUTES_TYPE.NBT));
-            attributeList.add(attributes.build());
-        }
-
-        builder.put(key.BUKKIT, attributeList.build());
-    }
-
-    static void serializePluginCompounds(NBTTagCompound nbttagcompound, ImmutableMap.Builder<String, Object> builder, ItemMetaKey key) {
-        if (nbttagcompound == null || nbttagcompound.isEmpty()) {
-            return;
-        }
-
-        ImmutableList.Builder<ImmutableMap<String, Object>> pluginList = ImmutableList.builder();
-        for (String pluginName : (Set<String>) nbttagcompound.c()) {
-            NBTTagCompound pluginCompound = (NBTTagCompound) nbttagcompound.getCompound(pluginName);
-            ImmutableMap.Builder<String, Object> values = ImmutableMap.builder();
-            for (String s : (Set<String>) nbttagcompound.c()) {
-                Object object;
-                switch (pluginCompound.get(s).getTypeId()) {
-                case 1:
-                    object = pluginCompound.getByte(s);
-                    break;
-                case 2:
-                    object = pluginCompound.getShort(s);
-                    break;
-                case 3:
-                    object = pluginCompound.getInt(s);
-                    break;
-                case 4:
-                    object = pluginCompound.getLong(s);
-                    break;
-                case 5:
-                    object = pluginCompound.getFloat(s);
-                    break;
-                case 6:
-                    object = pluginCompound.getDouble(s);
-                    break;
-                case 8:
-                    object = pluginCompound.getString(s);
-                    break;
-                default:
-                    continue;
-                }
-                values.put(s, object);
-            }
-            pluginList.add(values.build());
-        }
-
-        builder.put(key.BUKKIT, pluginList.build());
     }
 
     static void safelyAdd(Iterable<?> addFrom, Collection<String> addTo, int maxItemLength) {
