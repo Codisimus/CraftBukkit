@@ -200,7 +200,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
     private List<String> lore;
     private Map<Enchantment, Integer> enchantments;
     private int repairCost;
-    private final NBTTagList attributes;
+    private NBTTagList attributes;
 
     CraftMetaItem(CraftMetaItem meta) {
         if (meta == null) {
@@ -231,11 +231,11 @@ class CraftMetaItem implements ItemMeta, Repairable {
             }
 
             if (display.hasKey(LORE.NBT)) {
-                NBTTagList list = display.getList(LORE.NBT);
+                NBTTagList list = display.getList(LORE.NBT, 8);
                 lore = new ArrayList<String>(list.size());
 
                 for (int index = 0; index < list.size(); index++) {
-                    String line = ((NBTTagString) list.get(index)).data;
+                    String line = list.f(index);
                     lore.add(line);
                 }
             }
@@ -250,7 +250,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
 
         if (tag.get(ATTRIBUTES.NBT) instanceof NBTTagList) {
             NBTTagList save = null;
-            NBTTagList nbttaglist = tag.getList(ATTRIBUTES.NBT);
+            NBTTagList nbttaglist = tag.getList(ATTRIBUTES.NBT, 10);
 
             for (int i = 0; i < nbttaglist.size(); ++i) {
                 if (!(nbttaglist.get(i) instanceof NBTTagCompound)) {
@@ -264,7 +264,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
                 if (!(nbttagcompound.get(ATTRIBUTES_UUID_LOW.NBT) instanceof NBTTagLong)) {
                     continue;
                 }
-                if (!(nbttagcompound.get(ATTRIBUTES_IDENTIFIER.NBT) instanceof NBTTagString) || !CraftItemFactory.KNOWN_NBT_ATTRIBUTE_NAMES.contains(nbttagcompound.getString(ATTRIBUTES_IDENTIFIER.NBT))) {
+                if (!(nbttagcompound.get(ATTRIBUTES_IDENTIFIER.NBT) instanceof NBTTagString)) {//|| !CraftItemFactory.KNOWN_NBT_ATTRIBUTE_NAMES.contains(nbttagcompound.getString(ATTRIBUTES_IDENTIFIER.NBT))) {
                     continue;
                 }
                 if (!(nbttagcompound.get(ATTRIBUTES_NAME.NBT) instanceof NBTTagString) || nbttagcompound.getString(ATTRIBUTES_NAME.NBT).isEmpty()) {
@@ -278,7 +278,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
                 }
 
                 if (save == null) {
-                    save = new NBTTagList(ATTRIBUTES.NBT);
+                    save = new NBTTagList();
                 }
 
                 NBTTagCompound entry = new NBTTagCompound();
@@ -302,7 +302,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
             return null;
         }
 
-        NBTTagList ench = tag.getList(key.NBT);
+        NBTTagList ench = tag.getList(key.NBT, 10);
         Map<Enchantment, Integer> enchantments = new HashMap<Enchantment, Integer>(ench.size());
 
         for (int i = 0; i < ench.size(); i++) {
@@ -375,11 +375,11 @@ class CraftMetaItem implements ItemMeta, Repairable {
     @Overridden
     void applyToItem(NBTTagCompound itemTag) {
         if (hasDisplayName()) {
-            setDisplayTag(itemTag, NAME.NBT, new NBTTagString(NAME.NBT, displayName));
+            setDisplayTag(itemTag, NAME.NBT, new NBTTagString(displayName));
         }
 
         if (hasLore()) {
-            setDisplayTag(itemTag, LORE.NBT, createStringList(lore, LORE));
+            setDisplayTag(itemTag, LORE.NBT, createStringList(lore));
         }
 
         applyEnchantments(enchantments, itemTag, ENCHANTMENTS);
@@ -393,14 +393,14 @@ class CraftMetaItem implements ItemMeta, Repairable {
         }
     }
 
-    static NBTTagList createStringList(List<String> list, ItemMetaKey key) {
+    static NBTTagList createStringList(List<String> list) {
         if (list == null || list.isEmpty()) {
             return null;
         }
 
-        NBTTagList tagList = new NBTTagList(key.NBT);
+        NBTTagList tagList = new NBTTagList();
         for (String value : list) {
-            tagList.add(new NBTTagString("", value));
+            tagList.add(new NBTTagString(value));
         }
 
         return tagList;
@@ -411,7 +411,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
             return;
         }
 
-        NBTTagList list = new NBTTagList(key.NBT);
+        NBTTagList list = new NBTTagList();
 
         for (Map.Entry<Enchantment, Integer> entry : enchantments.entrySet()) {
             NBTTagCompound subtag = new NBTTagCompound();
@@ -429,7 +429,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
         final NBTTagCompound display = tag.getCompound(DISPLAY.NBT);
 
         if (!tag.hasKey(DISPLAY.NBT)) {
-            tag.setCompound(DISPLAY.NBT, display);
+            tag.set(DISPLAY.NBT, display);
         }
 
         display.set(key, value);
@@ -462,7 +462,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
     }
 
     public boolean hasAttributes() {
-        return this.attributes != null && attributes.size() > 0;
+        return this.attributes != null && this.attributes.size() > 0;
     }
 
     public boolean hasRepairCost() {
@@ -599,6 +599,9 @@ class CraftMetaItem implements ItemMeta, Repairable {
             if (this.enchantments != null) {
                 clone.enchantments = new HashMap<Enchantment, Integer>(this.enchantments);
             }
+            if (this.attributes != null) {
+                clone.attributes = (NBTTagList) this.attributes.clone();
+            }
             return clone;
         } catch (CloneNotSupportedException e) {
             throw new Error(e);
@@ -628,9 +631,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
             builder.put(REPAIR.BUKKIT, repairCost);
         }
 
-        if (hasAttributes()) {
-            serializeAttributes(attributes, builder, ATTRIBUTES);
-        }
+        serializeAttributes(attributes, builder, ATTRIBUTES);
 
         return builder;
     }
@@ -649,6 +650,10 @@ class CraftMetaItem implements ItemMeta, Repairable {
     }
 
     static void serializeAttributes(NBTTagList nbttaglist, ImmutableMap.Builder<String, Object> builder, ItemMetaKey key) {
+        if (nbttaglist == null || nbttaglist.size() == 0) {
+            return;
+        }
+
         ImmutableList.Builder<ImmutableMap<String, Object>> attributeList = ImmutableList.builder();
         for (int i = 0; i < nbttaglist.size(); i++) {
             ImmutableMap.Builder<String, Object> attributes = ImmutableMap.builder();
@@ -663,7 +668,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
             if (!(nbttagcompound.get(ATTRIBUTES_UUID_LOW.NBT) instanceof NBTTagLong)) {
                 continue;
             }
-            if (!(nbttagcompound.get(ATTRIBUTES_IDENTIFIER.NBT) instanceof NBTTagString) || !CraftItemFactory.KNOWN_NBT_ATTRIBUTE_NAMES.contains(nbttagcompound.getString(ATTRIBUTES_IDENTIFIER.NBT))) {
+            if (!(nbttagcompound.get(ATTRIBUTES_IDENTIFIER.NBT) instanceof NBTTagString)) {//|| !CraftItemFactory.KNOWN_NBT_ATTRIBUTE_NAMES.contains(nbttagcompound.getString(ATTRIBUTES_IDENTIFIER.NBT))) {
                 continue;
             }
             if (!(nbttagcompound.get(ATTRIBUTES_NAME.NBT) instanceof NBTTagString) || nbttagcompound.getString(ATTRIBUTES_NAME.NBT).isEmpty()) {
