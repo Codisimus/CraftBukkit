@@ -195,12 +195,16 @@ class CraftMetaItem implements ItemMeta, Repairable {
     static final ItemMetaKey ATTRIBUTES_UUID_HIGH = new ItemMetaKey("UUIDMost", "uuid-high");
     @Specific(Specific.To.NBT)
     static final ItemMetaKey ATTRIBUTES_UUID_LOW = new ItemMetaKey("UUIDLeast", "uuid-low");
+    @Specific(Specific.To.NBT)
+    static final ItemMetaKey CUSTOM = new ItemMetaKey("Custom", "custom");
+    //TODO: Create custom ItemMetaKeys
 
     private String displayName;
     private List<String> lore;
     private Map<Enchantment, Integer> enchantments;
     private int repairCost;
     private NBTTagList attributes;
+    //private NBTTagCompound customValues;
 
     CraftMetaItem(CraftMetaItem meta) {
         if (meta == null) {
@@ -219,7 +223,9 @@ class CraftMetaItem implements ItemMeta, Repairable {
         }
 
         this.repairCost = meta.repairCost;
-        this.attributes = meta.attributes;
+        this.attributes = (NBTTagList) meta.attributes.clone();
+
+        //TODO: Clone custom NBTTagCompounds
     }
 
     CraftMetaItem(NBTTagCompound tag) {
@@ -295,6 +301,8 @@ class CraftMetaItem implements ItemMeta, Repairable {
         } else {
             attributes = null;
         }
+
+        //TODO: Store custom NBTTagCompounds
     }
 
     static Map<Enchantment, Integer> buildEnchantments(NBTTagCompound tag, ItemMetaKey key) {
@@ -331,6 +339,8 @@ class CraftMetaItem implements ItemMeta, Repairable {
         }
 
         attributes = buildAttributes(map, ATTRIBUTES);
+
+        //customValues = buildCustomValues(map, CUSTOM);
     }
 
     static Map<Enchantment, Integer> buildEnchantments(Map<String, Object> map, ItemMetaKey key) {
@@ -391,6 +401,8 @@ class CraftMetaItem implements ItemMeta, Repairable {
         if (attributes != null) {
             itemTag.set(ATTRIBUTES.NBT, attributes);
         }
+
+        //TODO: Apply custom values
     }
 
     static NBTTagList createStringList(List<String> list) {
@@ -464,6 +476,10 @@ class CraftMetaItem implements ItemMeta, Repairable {
     public boolean hasAttributes() {
         return this.attributes != null && this.attributes.size() > 0;
     }
+
+//    public boolean hasCustomValues() {
+//        return this.customValues != null && this.customValues.size() > 0;
+//    }
 
     public boolean hasRepairCost() {
         return repairCost > 0;
@@ -560,6 +576,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
                 && (this.hasLore() ? that.hasLore() && this.lore.equals(that.lore) : !that.hasLore())
                 && (this.hasAttributes() ? that.hasAttributes() && this.attributes.equals(that.attributes) : !that.hasAttributes())
                 && (this.hasRepairCost() ? that.hasRepairCost() && this.repairCost == that.repairCost : !that.hasRepairCost());
+                //&& (this.hasRepairCost() ? that.hasCustom() && this.custom.equals(that.custom) : !that.hasCustom());
     }
 
     /**
@@ -585,6 +602,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
         hash = 61 * hash + (hasEnchants() ? this.enchantments.hashCode() : 0);
         hash = 61 * hash + (hasAttributes() ? this.attributes.hashCode() : 0);
         hash = 61 * hash + (hasRepairCost() ? this.repairCost : 0);
+        //hash = 61 * hash + (hasCustom() ? this.custom.hashCode() : 0);
         return hash;
     }
 
@@ -602,6 +620,7 @@ class CraftMetaItem implements ItemMeta, Repairable {
             if (this.attributes != null) {
                 clone.attributes = (NBTTagList) this.attributes.clone();
             }
+            //TODO:  Clone custom values
             return clone;
         } catch (CloneNotSupportedException e) {
             throw new Error(e);
@@ -632,6 +651,8 @@ class CraftMetaItem implements ItemMeta, Repairable {
         }
 
         serializeAttributes(attributes, builder, ATTRIBUTES);
+
+        //Serialize custom values
 
         return builder;
     }
